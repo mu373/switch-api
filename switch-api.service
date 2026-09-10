@@ -1,0 +1,21 @@
+[Unit]
+Description=Logical device switch HTTP API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=switch-api
+WorkingDirectory=/opt/switch-api
+EnvironmentFile=/opt/switch-api/.env
+Environment=SWITCH_API_CONFIG=/opt/switch-api/config.yaml
+ExecStart=/opt/switch-api/switch-api
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

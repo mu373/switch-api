@@ -1,0 +1,187 @@
+openapi: 3.0.3
+info:
+  title: Switch API
+  version: 1.0.0
+  description: Execute configured ON and OFF action sequences for logical switches.
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      summary: Check whether the API process is healthy
+      security: []
+      responses:
+        "200":
+          description: The API is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /switches:
+    get:
+      operationId: listSwitches
+      summary: List configured logical switches
+      responses:
+        "200":
+          description: Configured switches.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SwitchList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /switches/{switch_id}/on:
+    post:
+      operationId: switchOn
+      summary: Execute the configured ON sequence
+      parameters:
+        - $ref: "#/components/parameters/SwitchID"
+      responses:
+        "200":
+          description: The ON sequence completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/ActionFailed"
+        "504":
+          $ref: "#/components/responses/ActionFailed"
+  /switches/{switch_id}/off:
+    post:
+      operationId: switchOff
+      summary: Execute the configured OFF sequence
+      parameters:
+        - $ref: "#/components/parameters/SwitchID"
+      responses:
+        "200":
+          description: The OFF sequence completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/ActionFailed"
+        "504":
+          $ref: "#/components/responses/ActionFailed"
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+  parameters:
+    SwitchID:
+      name: switch_id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: API key is missing or invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: The logical switch is not configured.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ActionFailed:
+      description: A configured provider action failed or timed out.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    SwitchList:
+      type: object
+      required: [switches]
+      properties:
+        switches:
+          type: array
+          items:
+            $ref: "#/components/schemas/Switch"
+    Switch:
+      type: object
+      required: [id, display_name, actions]
+      properties:
+        id:
+          type: string
+        display_name:
+          type: string
+        actions:
+          type: array
+          items:
+            type: string
+            enum: [on, off]
+    ActionResult:
+      type: object
+      required: [switch_id, requested_state, status, steps]
+      properties:
+        switch_id:
+          type: string
+        requested_state:
+          type: string
+          enum: [on, off]
+        status:
+          type: string
+          enum: [completed, failed]
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/StepResult"
+        error:
+          type: string
+    StepResult:
+      type: object
+      required: [index, driver, status]
+      properties:
+        index:
+          type: integer
+          minimum: 0
+        driver:
+          type: string
+          enum: [switchbot, shelly-gen2, delay]
+        device_id:
+          type: string
+        action:
+          type: string
+        duration:
+          type: string
+        status:
+          type: string
+          enum: [completed, skipped, failed]
+        message:
+          type: string
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        operation:
+          $ref: "#/components/schemas/ActionResult"
+security:
+  - ApiKeyAuth: []

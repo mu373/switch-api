@@ -1,0 +1,35 @@
+listen_addr: ":8010"
+action_timeout: 90s
+
+switchbot:
+  base_url: https://api.switch-bot.com/v1.1
+  token_env: SWITCHBOT_TOKEN
+  secret_env: SWITCHBOT_SECRET
+
+# Shellyを使わない場合は空で構いません。
+shelly_devices: {}
+
+switches:
+  - id: office-printer
+    display_name: Office printer
+    on:
+      # 未登録の任意ステップはskippedになります。
+      - driver: shelly-gen2
+        device_id: printer-plug
+        action: on
+        optional: true
+      - driver: delay
+        duration: 2s
+      - driver: switchbot
+        device_id: REPLACE_WITH_SWITCHBOT_DEVICE_ID
+        action: turnOn
+    off:
+      - driver: switchbot
+        device_id: REPLACE_WITH_SWITCHBOT_DEVICE_ID
+        action: turnOff
+      - driver: delay
+        duration: 15s
+      - driver: shelly-gen2
+        device_id: printer-plug
+        action: off
+        optional: true
