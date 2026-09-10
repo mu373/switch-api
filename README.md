@@ -5,6 +5,9 @@ OFF sequences for logical switches. A logical switch can represent a printer,
 amplifier, PC, light, or any other device without exposing its provider details
 to API callers.
 
+If you want to print documents on a printer through an HTTP API, see
+[print-api](https://github.com/mu373/print-api).
+
 ## Features
 
 - Named logical switches with independent ON and OFF sequences
