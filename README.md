@@ -1,7 +1,7 @@
 # switch-api
 
-`switch-api` is a small, authenticated HTTP API for executing configured ON and
-OFF sequences for logical switches. A logical switch can represent a printer,
+`switch-api` is a small, authenticated HTTP API for controlling devices through
+configured ON and OFF sequences. A logical switch can represent a printer,
 amplifier, PC, light, or any other device without exposing its provider details
 to API callers.
 
