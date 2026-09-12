@@ -18,6 +18,10 @@ switches:
         device_id: printer-plug
         action: on
         optional: true
+      - driver: shelly-gen2
+        device_id: printer-plug
+        action: verify-on
+        optional: true
       - driver: delay
         duration: 2s
       - driver: switchbot
@@ -32,4 +36,8 @@ switches:
       - driver: shelly-gen2
         device_id: printer-plug
         action: off
+        optional: true
+      - driver: shelly-gen2
+        device_id: printer-plug
+        action: verify-off
         optional: true

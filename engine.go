@@ -13,13 +13,15 @@ const (
 )
 
 type stepResult struct {
-	Index    int    `json:"index"`
-	Driver   string `json:"driver"`
-	DeviceID string `json:"device_id,omitempty"`
-	Action   string `json:"action,omitempty"`
-	Duration string `json:"duration,omitempty"`
-	Status   string `json:"status"`
-	Message  string `json:"message,omitempty"`
+	Index      int      `json:"index"`
+	Driver     string   `json:"driver"`
+	DeviceID   string   `json:"device_id,omitempty"`
+	Action     string   `json:"action,omitempty"`
+	Duration   string   `json:"duration,omitempty"`
+	Status     string   `json:"status"`
+	Message    string   `json:"message,omitempty"`
+	Output     *bool    `json:"output,omitempty"`
+	PowerWatts *float64 `json:"power_watts,omitempty"`
 }
 
 type actionResult struct {

@@ -228,8 +228,8 @@ func (s stepConfig) validate(root *config) error {
 		if !idPattern.MatchString(s.DeviceID) {
 			return fmt.Errorf("invalid shelly device_id %q", s.DeviceID)
 		}
-		if s.Action != "on" && s.Action != "off" {
-			return fmt.Errorf("shelly-gen2 action must be on or off")
+		if s.Action != "on" && s.Action != "off" && s.Action != "verify-on" && s.Action != "verify-off" {
+			return fmt.Errorf("shelly-gen2 action must be on, off, verify-on, or verify-off")
 		}
 		if s.Duration != "" {
 			return fmt.Errorf("duration is only valid for delay steps")

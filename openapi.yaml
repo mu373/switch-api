@@ -166,6 +166,7 @@ components:
           type: string
         action:
           type: string
+          description: Provider action; Shelly supports on, off, verify-on, and verify-off.
         duration:
           type: string
         status:
@@ -173,6 +174,12 @@ components:
           enum: [completed, skipped, failed]
         message:
           type: string
+        output:
+          type: boolean
+          description: Relay output observed during a Shelly verification step.
+        power_watts:
+          type: number
+          description: Measured active power during a Shelly verification step, when available.
     Error:
       type: object
       required: [code, message]

@@ -24,7 +24,7 @@ If you want to print documents on a printer through an HTTP API, see
 | Driver | Actions | Purpose |
 | --- | --- | --- |
 | `switchbot` | `turnOn`, `turnOff`, `press` | Send a SwitchBot Bot command. |
-| `shelly-gen2` | `on`, `off` | Call Shelly Gen2+ `Switch.Set` over local RPC. |
+| `shelly-gen2` | `on`, `off`, `verify-on`, `verify-off` | Set the relay output or confirm its state through local RPC. |
 | `delay` | — | Wait for a configured duration. |
 
 An optional SwitchBot or Shelly step is reported as `skipped` only when its
@@ -88,6 +88,9 @@ switches:
       - driver: shelly-gen2
         device_id: printer-plug
         action: on
+      - driver: shelly-gen2
+        device_id: printer-plug
+        action: verify-on
       - driver: delay
         duration: 2s
       - driver: switchbot
@@ -102,7 +105,19 @@ switches:
       - driver: shelly-gen2
         device_id: printer-plug
         action: off
+      - driver: shelly-gen2
+        device_id: printer-plug
+        action: verify-off
 ```
+
+`verify-on` and `verify-off` call `Switch.GetStatus` and require the configured
+component's `output` to match the expected state. Verification makes up to three
+attempts, waiting one second between failed attempts. A persistent mismatch, reported
+device error, invalid response, or failed request stops the sequence after those
+attempts. Cancellation or the action timeout ends retries immediately. Verification
+does not change the relay state or retry commands. Its step result includes `output`
+and, when the device provides it, `power_watts`. Relay output confirms electrical
+supply; printer readiness is checked separately by the printing workflow.
 
 The current Shelly driver targets unauthenticated Gen2+ RPC endpoints on a
 trusted local network. Add Digest authentication support before using it with a
