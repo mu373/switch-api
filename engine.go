@@ -36,6 +36,23 @@ type stepRunner interface {
 	run(context.Context, stepConfig) (stepResult, error)
 }
 
+type switchStatus struct {
+	SwitchID string               `json:"switch_id"`
+	Status   string               `json:"status"`
+	Devices  []switchDeviceStatus `json:"devices"`
+}
+
+type switchDeviceStatus struct {
+	Driver     string   `json:"driver"`
+	DeviceID   string   `json:"device_id"`
+	Output     bool     `json:"output"`
+	PowerWatts *float64 `json:"power_watts,omitempty"`
+}
+
+type switchStatusReader interface {
+	readSwitchStatus(context.Context, logicalSwitchConfig) (switchStatus, error)
+}
+
 type switchService struct {
 	switches map[string]logicalSwitchConfig
 	order    []string
@@ -115,3 +132,17 @@ func (s *switchService) execute(parent context.Context, id string, state switchS
 }
 
 var errSwitchNotFound = fmt.Errorf("switch not found")
+
+func (s *switchService) readStatus(parent context.Context, id string) (switchStatus, error) {
+	configured, ok := s.switches[id]
+	if !ok {
+		return switchStatus{}, errSwitchNotFound
+	}
+	reader, ok := s.runner.(switchStatusReader)
+	if !ok {
+		return switchStatus{}, fmt.Errorf("switch status is unavailable")
+	}
+	ctx, cancel := s.timeout(parent)
+	defer cancel()
+	return reader.readSwitchStatus(ctx, configured)
+}

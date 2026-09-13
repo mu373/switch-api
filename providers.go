@@ -250,7 +250,58 @@ func (p *providers) verifyShellyOutput(ctx context.Context, device *shellyClient
 	return status, fmt.Errorf("Shelly verification failed after %d attempts: %w", shellyVerifyAttempts, err)
 }
 
+func (p *providers) readSwitchStatus(ctx context.Context, configured logicalSwitchConfig) (switchStatus, error) {
+	result := switchStatus{SwitchID: configured.ID, Status: "unknown", Devices: []switchDeviceStatus{}}
+	seen := make(map[string]bool)
+	steps := append(append([]stepConfig{}, configured.On...), configured.Off...)
+	for _, step := range steps {
+		if step.Driver != "shelly-gen2" || seen[step.DeviceID] {
+			continue
+		}
+		seen[step.DeviceID] = true
+		device, ok := p.shelly[step.DeviceID]
+		if !ok {
+			if step.Optional {
+				continue
+			}
+			return result, fmt.Errorf("Shelly device %q is not configured", step.DeviceID)
+		}
+		status, err := device.readStatus(ctx)
+		if err != nil {
+			return result, err
+		}
+		if len(status.Errors) != 0 {
+			return result, fmt.Errorf("Shelly status reports errors: %s", strings.Join(status.Errors, ", "))
+		}
+		result.Devices = append(result.Devices, switchDeviceStatus{Driver: "shelly-gen2", DeviceID: step.DeviceID, Output: *status.Output, PowerWatts: status.PowerWatts})
+		state := "off"
+		if *status.Output {
+			state = "on"
+		}
+		if result.Status == "unknown" {
+			result.Status = state
+		} else if result.Status != state {
+			result.Status = "mixed"
+		}
+	}
+	return result, nil
+}
+
 func (c *shellyClient) verifyOutput(ctx context.Context, expected bool) (shellySwitchStatus, error) {
+	status, err := c.readStatus(ctx)
+	if err != nil {
+		return status, err
+	}
+	if len(status.Errors) != 0 {
+		return status, fmt.Errorf("Shelly status reports errors: %s", strings.Join(status.Errors, ", "))
+	}
+	if *status.Output != expected {
+		return status, fmt.Errorf("Shelly output is %t, expected %t", *status.Output, expected)
+	}
+	return status, nil
+}
+
+func (c *shellyClient) readStatus(ctx context.Context) (shellySwitchStatus, error) {
 	var status shellySwitchStatus
 	if err := c.callRPC(ctx, "Switch.GetStatus", struct {
 		ID int `json:"id"`
@@ -262,12 +313,6 @@ func (c *shellyClient) verifyOutput(ctx context.Context, expected bool) (shellyS
 	}
 	if status.Output == nil {
 		return status, fmt.Errorf("Shelly status has no output")
-	}
-	if len(status.Errors) != 0 {
-		return status, fmt.Errorf("Shelly status reports errors: %s", strings.Join(status.Errors, ", "))
-	}
-	if *status.Output != expected {
-		return status, fmt.Errorf("Shelly output is %t, expected %t", *status.Output, expected)
 	}
 	return status, nil
 }

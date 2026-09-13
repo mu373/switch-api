@@ -39,6 +39,7 @@ func newHTTPHandler(service *switchService, apiKey string) http.Handler {
 	})
 	mux.Handle("GET /docs/", v5emb.New("Switch API", "/openapi.yaml", "/docs/"))
 	mux.Handle("GET /switches", handler.authenticate(http.HandlerFunc(handler.listSwitches)))
+	mux.Handle("GET /switches/{id}/status", handler.authenticate(http.HandlerFunc(handler.readSwitchStatus)))
 	mux.Handle("POST /switches/{id}/on", handler.authenticate(http.HandlerFunc(handler.switchOn)))
 	mux.Handle("POST /switches/{id}/off", handler.authenticate(http.HandlerFunc(handler.switchOff)))
 	return securityHeaders(mux)
@@ -68,6 +69,24 @@ func (a *api) listSwitches(w http.ResponseWriter, _ *http.Request) {
 
 func (a *api) switchOn(w http.ResponseWriter, r *http.Request) {
 	a.execute(w, r, switchStateOn)
+}
+
+func (a *api) readSwitchStatus(w http.ResponseWriter, r *http.Request) {
+	result, err := a.service.readStatus(r.Context(), r.PathValue("id"))
+	if err == nil {
+		writeJSON(w, http.StatusOK, result)
+		return
+	}
+	if errors.Is(err, errSwitchNotFound) {
+		writeJSON(w, http.StatusNotFound, errorResponse{Code: "switch_not_found", Message: "switch is not configured"})
+		return
+	}
+	status := http.StatusBadGateway
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		status = http.StatusGatewayTimeout
+	}
+	log.Printf("switch %q status failed: %v", r.PathValue("id"), err)
+	writeJSON(w, status, errorResponse{Code: "status_unavailable", Message: "switch status could not be confirmed"})
 }
 
 func (a *api) switchOff(w http.ResponseWriter, r *http.Request) {

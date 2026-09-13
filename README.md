@@ -145,6 +145,7 @@ All switch endpoints require `X-Api-Key` with `SWITCH_CONTROL_API_KEY`.
 | --- | --- | --- |
 | `GET` | `/healthz` | Unauthenticated process health check. |
 | `GET` | `/switches` | List configured logical switches. |
+| `GET` | `/switches/{id}/status` | Read configured Shelly relay states and power measurements. |
 | `POST` | `/switches/{id}/on` | Execute the configured ON sequence. |
 | `POST` | `/switches/{id}/off` | Execute the configured OFF sequence. |
 
@@ -173,6 +174,12 @@ The response contains an ordered result for every step.
   ]
 }
 ```
+
+The status endpoint reads each Shelly device referenced by the switch once,
+without running ON/OFF steps. Its aggregate `status` is `on`, `off`, `mixed`, or
+`unknown` when the switch has no configured Shelly devices. Provider faults and
+unconfirmed states return an error rather than an inferred state. This endpoint
+reports electrical supply, not the readiness of the connected appliance.
 
 ## OpenAPI and Swagger UI
 
