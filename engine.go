@@ -30,6 +30,8 @@ type actionResult struct {
 	Status         string       `json:"status"`
 	Steps          []stepResult `json:"steps"`
 	Error          string       `json:"error,omitempty"`
+	SupplyState    string       `json:"supply_state,omitempty"`
+	DeviceState    string       `json:"device_state,omitempty"`
 }
 
 type stepRunner interface {
@@ -37,9 +39,20 @@ type stepRunner interface {
 }
 
 type switchStatus struct {
-	SwitchID string               `json:"switch_id"`
-	Status   string               `json:"status"`
-	Devices  []switchDeviceStatus `json:"devices"`
+	SwitchID    string               `json:"switch_id"`
+	Status      string               `json:"status"`
+	Devices     []switchDeviceStatus `json:"devices"`
+	SupplyState string               `json:"supply_state,omitempty"`
+	DeviceState string               `json:"device_state,omitempty"`
+}
+
+type switchController interface {
+	setPower(context.Context, switchState) (actionResult, error)
+	readStatus(context.Context) (switchStatus, error)
+}
+
+type switchControllerProvider interface {
+	getSwitchController(logicalSwitchConfig) (switchController, error)
 }
 
 type switchDeviceStatus struct {
@@ -65,9 +78,18 @@ func newSwitchService(cfg config, runner stepRunner) *switchService {
 	switches := make(map[string]logicalSwitchConfig, len(cfg.Switches))
 	locks := make(map[string]chan struct{}, len(cfg.Switches))
 	order := make([]string, 0, len(cfg.Switches))
+	deviceLocks := map[deviceReference]chan struct{}{}
 	for _, configured := range cfg.Switches {
 		switches[configured.ID] = configured
 		locks[configured.ID] = make(chan struct{}, 1)
+		if configured.Driver != "" {
+			reference := deviceReference{configured.Driver, configured.DeviceID}
+			if lock, ok := deviceLocks[reference]; ok {
+				locks[configured.ID] = lock
+			} else {
+				deviceLocks[reference] = locks[configured.ID]
+			}
+		}
 		order = append(order, configured.ID)
 	}
 	return &switchService{
@@ -105,6 +127,19 @@ func (s *switchService) execute(parent context.Context, id string, state switchS
 		return actionResult{}, ctx.Err()
 	}
 
+	if configured.Driver != "" {
+		provider, ok := s.runner.(switchControllerProvider)
+		if !ok {
+			return actionResult{}, fmt.Errorf("device controller is unavailable")
+		}
+		controller, err := provider.getSwitchController(configured)
+		if err != nil {
+			return actionResult{}, err
+		}
+		result, err := controller.setPower(ctx, state)
+		result.SwitchID, result.RequestedState = id, state
+		return result, err
+	}
 	steps := configured.On
 	if state == switchStateOff {
 		steps = configured.Off
@@ -138,11 +173,24 @@ func (s *switchService) readStatus(parent context.Context, id string) (switchSta
 	if !ok {
 		return switchStatus{}, errSwitchNotFound
 	}
+	ctx, cancel := s.timeout(parent)
+	defer cancel()
+	if configured.Driver != "" {
+		provider, ok := s.runner.(switchControllerProvider)
+		if !ok {
+			return switchStatus{}, fmt.Errorf("device controller is unavailable")
+		}
+		controller, err := provider.getSwitchController(configured)
+		if err != nil {
+			return switchStatus{}, err
+		}
+		result, err := controller.readStatus(ctx)
+		result.SwitchID = id
+		return result, err
+	}
 	reader, ok := s.runner.(switchStatusReader)
 	if !ok {
 		return switchStatus{}, fmt.Errorf("switch status is unavailable")
 	}
-	ctx, cancel := s.timeout(parent)
-	defer cancel()
 	return reader.readSwitchStatus(ctx, configured)
 }

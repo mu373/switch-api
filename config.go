@@ -31,6 +31,7 @@ type config struct {
 	ActionTimeout  string                        `json:"action_timeout" yaml:"action_timeout"`
 	SwitchBot      *switchBotConfig              `json:"switchbot,omitempty" yaml:"switchbot,omitempty"`
 	ShellyDevices  map[string]shellyDeviceConfig `json:"shelly_devices,omitempty" yaml:"shelly_devices,omitempty"`
+	IPPPrinters    map[string]ippPrinterConfig   `json:"ipp_printers,omitempty" yaml:"ipp_printers,omitempty"`
 	Switches       []logicalSwitchConfig         `json:"switches" yaml:"switches"`
 	actionDuration time.Duration
 }
@@ -51,6 +52,8 @@ type logicalSwitchConfig struct {
 	DisplayName string       `json:"display_name" yaml:"display_name"`
 	On          []stepConfig `json:"on" yaml:"on"`
 	Off         []stepConfig `json:"off" yaml:"off"`
+	Driver      string       `json:"driver,omitempty" yaml:"driver,omitempty"`
+	DeviceID    string       `json:"device_id,omitempty" yaml:"device_id,omitempty"`
 }
 
 type stepConfig struct {
@@ -121,6 +124,9 @@ func (c *config) validate() error {
 		if err := device.validate(); err != nil {
 			return fmt.Errorf("shelly_devices[%q]: %w", id, err)
 		}
+	}
+	if err := c.validatePrinterBindings(); err != nil {
+		return err
 	}
 
 	if len(c.Switches) == 0 {
@@ -195,6 +201,18 @@ func (c *logicalSwitchConfig) validate(root *config) error {
 	}
 	if c.DisplayName == "" {
 		c.DisplayName = c.ID
+	}
+	if c.Driver != "" || c.DeviceID != "" {
+		if c.Driver != "ipp-printer" {
+			return fmt.Errorf("unknown device controller driver %q", c.Driver)
+		}
+		if len(c.On) != 0 || len(c.Off) != 0 {
+			return fmt.Errorf("a device controller cannot also define on/off steps")
+		}
+		if _, ok := root.IPPPrinters[c.DeviceID]; !ok {
+			return fmt.Errorf("IPP printer %q is not configured", c.DeviceID)
+		}
+		return nil
 	}
 	if len(c.On) == 0 || len(c.Off) == 0 {
 		return fmt.Errorf("on and off must each contain at least one step")

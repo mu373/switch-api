@@ -1,7 +1,7 @@
 # switch-api
 
 `switch-api` is a small, authenticated HTTP API for controlling devices through
-configured ON and OFF sequences. A logical switch can represent a printer,
+configured ON and OFF sequences or a managed device controller. A logical switch can represent a printer,
 amplifier, PC, light, or any other device without exposing its provider details
 to API callers.
 
@@ -15,6 +15,7 @@ If you want to print documents on a printer through an HTTP API, see
 - Per-switch operation locking to prevent overlapping actions
 - SwitchBot Cloud API v1.1 support
 - Optional Shelly Gen2+ local RPC support
+- Managed IPP-printer power with separate supply and body states
 - Delay steps between device actions
 - API-key authentication, OpenAPI 3.0, and embedded Swagger UI
 - Static Linux `amd64` builds with CGO disabled
@@ -30,6 +31,63 @@ If you want to print documents on a printer through an HTTP API, see
 An optional SwitchBot or Shelly step is reported as `skipped` only when its
 provider or device is not configured. Once configured, a provider failure stops
 the sequence and returns an error; it is never silently ignored.
+
+## Managed IPP printers
+
+Use a named printer controller instead of programming printer startup and cleanup
+as YAML steps. See [the two-printer example](config.ipp-printers.example.yaml).
+
+```yaml
+switches:
+  - id: office-printer
+    driver: ipp-printer
+    device_id: office
+ipp_printers:
+  office:
+    ipp_uri: ipp://192.168.1.51:631/ipp/print
+    supply: {driver: shelly-gen2, device_id: printer-plug}
+    power_control:
+      driver: switchbot
+      device_id: REPLACE_WITH_SWITCHBOT_DEVICE_ID
+    auto_start_wait: 30s
+    startup_timeout: 60s
+    shutdown_wait: 15s
+    poll_interval: 1s
+```
+
+The controller owns startup, repeated ON protection, bounded shutdown grace, and
+supply cleanup. YAML binds devices and timing values; `when_power` and
+`continue_on_error` are not supported. Existing generic step sequences remain
+fail-fast and are not allowed to bypass physical devices owned by a printer.
+
+After restoring supply, ON waits up to `auto_start_wait` for automatic boot. A valid
+read-only IPP response, including a printer fault, confirms body ON even at zero
+watts. An already responsive body never receives another ON button action. Only
+two OFF observations one poll apart authorize the body command. Positive or absent
+meter readings without IPP response mean unknown, not OFF. A missing meter works
+for automatically starting printers; omit `power_control` for plug-only devices.
+The whole startup must fit `startup_timeout`, including any body command. IPP
+power detection is not print readiness, job submission, or completion tracking.
+
+OFF presses the body button only after two ON observations, waits up to
+`shutdown_wait` (ending early after two OFF observations), then cuts and verifies
+supply. Failed startup also cuts supply. Cleanup has a reserved ten-second budget
+and continues after caller cancellation; hardware or network failure can still
+prevent a confirmed cutoff. Original errors remain errors even after successful
+cleanup. SwitchBot commands have a twenty-second budget and are never retried.
+A network outage together with zero measured watts remains indistinguishable
+from a stopped body; malformed or HTTP authentication-error responses instead fail.
+
+Status and action responses expose `supply_state` and `device_state` separately;
+legacy status remains an alias for supply state. Logical aliases referencing the
+same printer share one lock; different printers have independent locks. Sharing
+configured physical devices or the exact IPP endpoint across printer definitions
+is rejected. Distinct DNS names for the same hardware cannot be detected: bind
+each physical printer once and use logical aliases.
+
+The controller depends on supply, body-control, and state-probe interfaces. Current
+adapters are Shelly Gen2+, SwitchBot, and IPP. Other hardware requires a new adapter
+and explicit configuration wiring, not changes to the printer lifecycle policy.
 
 ## Configuration
 
@@ -56,12 +114,14 @@ SWITCH_API_CONFIG=config.yaml
 ```
 
 Each logical switch defines exactly which devices and actions are used. A
-switch does not automatically use Shelly or SwitchBot.
+switch does not automatically use Shelly or SwitchBot. The following legacy step
+examples are for manually sequenced devices; use the managed controller above for
+printer startup and shutdown.
 
 ```yaml
 switches:
-  - id: office-printer
-    display_name: Office printer
+  - id: amplifier
+    display_name: Amplifier
     on:
       - driver: switchbot
         device_id: REPLACE_WITH_SWITCHBOT_DEVICE_ID
@@ -78,18 +138,18 @@ Register only the Shelly devices that exist in your environment.
 
 ```yaml
 shelly_devices:
-  printer-plug:
+  amplifier-plug:
     base_url: http://192.168.1.50
     component_id: 0
 
 switches:
-  - id: office-printer
+  - id: amplifier
     on:
       - driver: shelly-gen2
-        device_id: printer-plug
+        device_id: amplifier-plug
         action: on
       - driver: shelly-gen2
-        device_id: printer-plug
+        device_id: amplifier-plug
         action: verify-on
       - driver: delay
         duration: 2s
@@ -103,10 +163,10 @@ switches:
       - driver: delay
         duration: 15s
       - driver: shelly-gen2
-        device_id: printer-plug
+        device_id: amplifier-plug
         action: off
       - driver: shelly-gen2
-        device_id: printer-plug
+        device_id: amplifier-plug
         action: verify-off
 ```
 
@@ -136,6 +196,12 @@ The default listen address is `:8010`. Set `listen_addr` in `config.yaml` to
 use another address or port, for example `127.0.0.1:9010` for localhost only or
 `:9010` for all interfaces. The service currently has no command-line address
 or port flag.
+
+Validate the selected configuration without credentials, listening, or device I/O:
+
+```bash
+SWITCH_API_CONFIG=config.yaml ./dist/switch-api -check-config
+```
 
 ## API
 

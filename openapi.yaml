@@ -164,6 +164,13 @@ components:
         status:
           type: string
           enum: [on, off, mixed, unknown]
+          description: Legacy supply-state alias; use supply_state and device_state for managed printers.
+        supply_state:
+          type: string
+          enum: [on, off, unknown]
+        device_state:
+          type: string
+          enum: [on, off, unknown]
         devices:
           type: array
           items:
@@ -197,6 +204,12 @@ components:
             $ref: "#/components/schemas/StepResult"
         error:
           type: string
+        supply_state:
+          type: string
+          enum: [on, off, unknown]
+        device_state:
+          type: string
+          enum: [on, off, unknown]
     StepResult:
       type: object
       required: [index, driver, status]
@@ -206,7 +219,7 @@ components:
           minimum: 0
         driver:
           type: string
-          enum: [switchbot, shelly-gen2, delay]
+          enum: [switchbot, shelly-gen2, delay, ipp-printer]
         device_id:
           type: string
         action:
@@ -221,10 +234,10 @@ components:
           type: string
         output:
           type: boolean
-          description: Relay output observed during a Shelly verification step.
+          description: Relay output observed during Shelly verification.
         power_watts:
           type: number
-          description: Measured active power during a Shelly verification step, when available.
+          description: Active power observed during Shelly verification, when available.
     Error:
       type: object
       required: [code, message]

@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -18,6 +19,8 @@ const defaultConfigPath = "config.yaml"
 var openAPISpec []byte
 
 func main() {
+	checkConfig := flag.Bool("check-config", false, "validate configuration without credentials or device I/O")
+	flag.Parse()
 	configPath := os.Getenv("SWITCH_API_CONFIG")
 	if configPath == "" {
 		configPath = defaultConfigPath
@@ -25,6 +28,10 @@ func main() {
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		log.Fatalf("load config: %v", err)
+	}
+	if *checkConfig {
+		log.Printf("configuration valid: %d switch(es)", len(cfg.Switches))
+		return
 	}
 	apiKey := os.Getenv("SWITCH_CONTROL_API_KEY")
 	if apiKey == "" {

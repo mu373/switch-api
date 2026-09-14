@@ -1,0 +1,42 @@
+listen_addr: ":8010"
+action_timeout: 90s
+
+switchbot: {}
+
+shelly_devices:
+  office-plug:
+    base_url: http://192.168.1.50
+    component_id: 0
+  spare-plug:
+    base_url: http://192.168.1.51
+    component_id: 0
+
+ipp_printers:
+  office:
+    ipp_uri: ipp://192.168.1.60:631/ipp/print
+    supply:
+      driver: shelly-gen2
+      device_id: office-plug
+    power_control:
+      driver: switchbot
+      device_id: REPLACE_WITH_SWITCHBOT_DEVICE_ID
+      on_command: turnOn
+      off_command: turnOff
+    auto_start_wait: 30s
+    startup_timeout: 60s
+    shutdown_wait: 30s
+    poll_interval: 1s
+  spare:
+    ipp_uri: ipp://192.168.1.61:631/ipp/print
+    supply:
+      driver: shelly-gen2
+      device_id: spare-plug
+    # No body power control: this printer must start when supply is restored.
+
+switches:
+  - id: office-printer
+    driver: ipp-printer
+    device_id: office
+  - id: spare-printer
+    driver: ipp-printer
+    device_id: spare

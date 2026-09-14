@@ -23,19 +23,22 @@ const (
 	maxProviderResponseBytes = 1 << 20
 	shellyVerifyAttempts     = 3
 	shellyVerifyInterval     = time.Second
+	switchBotStepTimeout     = 20 * time.Second
 )
 
 type providers struct {
-	switchBot *switchBotClient
-	shelly    map[string]*shellyClient
-	sleep     func(context.Context, time.Duration) error
+	switchBot   *switchBotClient
+	shelly      map[string]*shellyClient
+	sleep       func(context.Context, time.Duration) error
+	controllers map[deviceReference]switchController
 }
 
 func newProviders(cfg config) (*providers, error) {
 	httpClient := &http.Client{Timeout: cfg.actionDuration}
 	result := &providers{
-		shelly: make(map[string]*shellyClient, len(cfg.ShellyDevices)),
-		sleep:  sleepContext,
+		shelly:      make(map[string]*shellyClient, len(cfg.ShellyDevices)),
+		sleep:       sleepContext,
+		controllers: map[deviceReference]switchController{},
 	}
 	if cfg.SwitchBot != nil {
 		token := os.Getenv(cfg.SwitchBot.TokenEnv)
@@ -62,7 +65,22 @@ func newProviders(cfg config) (*providers, error) {
 			client:      httpClient,
 		}
 	}
+	for id, printer := range cfg.IPPPrinters {
+		controller, err := result.buildPrinterController(id, printer, &ippClient{client: httpClient})
+		if err != nil {
+			return nil, err
+		}
+		result.controllers[deviceReference{"ipp-printer", id}] = controller
+	}
 	return result, nil
+}
+
+func (p *providers) getSwitchController(configured logicalSwitchConfig) (switchController, error) {
+	controller, ok := p.controllers[deviceReference{configured.Driver, configured.DeviceID}]
+	if !ok {
+		return nil, fmt.Errorf("device controller is not configured")
+	}
+	return controller, nil
 }
 
 func (p *providers) run(ctx context.Context, step stepConfig) (stepResult, error) {
@@ -75,6 +93,8 @@ func (p *providers) run(ctx context.Context, step stepConfig) (stepResult, error
 
 	switch step.Driver {
 	case "switchbot":
+		buttonContext, cancelButton := context.WithTimeout(ctx, switchBotStepTimeout)
+		defer cancelButton()
 		if p.switchBot == nil {
 			if step.Optional {
 				result.Status = "skipped"
@@ -83,7 +103,7 @@ func (p *providers) run(ctx context.Context, step stepConfig) (stepResult, error
 			}
 			return result, fmt.Errorf("SwitchBot provider is not configured")
 		}
-		if err := p.switchBot.command(ctx, step.DeviceID, step.Action); err != nil {
+		if err := p.switchBot.command(buttonContext, step.DeviceID, step.Action); err != nil {
 			return result, err
 		}
 	case "shelly-gen2":
